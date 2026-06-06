@@ -1,0 +1,74 @@
+docker compose up -d
+
+
+Step 2: Triggering DAGs via curl (Git Bash)
+Feature 1: Top Callers by Spend
+DAG ID: top_callers_by_spend_dag (associated with top_callers.py)
+
+curl -X POST -u admin:admin -H "Content-Type: application/json" \
+  -d '{"conf": {"run_id": "top_callers_run"}}' \
+  http://localhost:8080/api/v1/dags/top_callers_by_spend_dag/dagRuns
+
+
+Feature 2: Tower Utilization Heatmap
+DAG ID: tower_utilization_heatmap_dag (associated with tower_heatmap.py)
+
+curl -X POST -u admin:admin -H "Content-Type: application/json" \
+  -d '{"conf": {"run_id": "tower_heatmap_run"}}' \
+  http://localhost:8080/api/v1/dags/tower_utilization_heatmap_dag/dagRuns
+
+
+Feature 3: Anomalous Call Detection
+DAG ID: anomalous_call_detection_dag (associated with anomalous_calls.py)
+
+curl -X POST -u admin:admin -H "Content-Type: application/json" \
+  -d '{"conf": {"run_id": "anomalous_calls_run"}}' \
+  http://localhost:8080/api/v1/dags/anomalous_call_detection_dag/dagRuns
+
+
+Feature 4: Revenue Reconciliation
+DAG ID: revenue_reconciliation_dag (associated with revenue_recon.py)
+
+curl -X POST -u admin:admin -H "Content-Type: application/json" \
+  -d '{"conf": {"run_id": "revenue_recon_run"}}' \
+  http://localhost:8080/api/v1/dags/revenue_reconciliation_dag/dagRuns
+
+
+Step 3: Checking DAG Run Execution Status
+
+# Check status of Top Callers run
+
+curl -X GET -u admin:admin http://localhost:8080/api/v1/dags/top_callers_by_spend_dag/dagRuns
+
+
+# Check status of Tower Heatmap run
+
+curl -X GET -u admin:admin http://localhost:8080/api/v1/dags/tower_utilization_heatmap_dag/dagRuns
+
+
+# Check status of Anomalous Calls run
+
+curl -X GET -u admin:admin http://localhost:8080/api/v1/dags/anomalous_call_detection_dag/dagRuns
+
+
+# Check status of Revenue Recon run
+
+curl -X GET -u admin:admin http://localhost:8080/api/v1/dags/revenue_reconciliation_dag/dagRuns
+
+
+Step 4: Verify Outputs
+
+# View Top Callers Output
+cat output/top_callers_by_spend/top_callers_run/part-*.csv | head -n 10
+cat output/top_callers_by_spend/top_callers_run/_MANIFEST.json
+
+# View Tower Heatmap Output
+cat output/tower_utilization_heatmap/tower_heatmap_run/part-*.csv | head -n 10
+cat output/tower_utilization_heatmap/tower_heatmap_run/_MANIFEST.json
+
+# View Anomalous Calls Output
+cat output/anomalous_call_detection/anomalous_calls_run/_MANIFEST.json
+
+# View Revenue Reconciliation Output
+cat output/revenue_reconciliation/revenue_recon_run/part-*.csv | head -n 10
+cat output/revenue_reconciliation/revenue_recon_run/_MANIFEST.json

@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    environment:
+      - CLUSTER_NAME=telecom_cluster
+    env_file:
+      - .env
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9870"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    depends_on:
+      namenode:
+        condition: service_healthy
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+    env_file:
+      - .env
+
+  spark-master:
+    image: bitnamilegacy/spark:3.5.0
+    container_name: spark-master
+    user: "50000:0"
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+    ports:
+      - "8081:8080"
+      - "7077:7077"
+    volumes:
+      - ./data:/data
+      - ./jobs:/jobs
+      - ./output:/output
+    depends_on:
+      namenode:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/127.0.0.1/8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  spark-worker:
+    image: bitnamilegacy/spark:3.5.0
+    container_name: spark-worker
+    user: "50000:0"
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+    volumes:
+      - ./data:/data
+      - ./jobs:/jobs
+      - ./output:/output
+    depends_on:
+      spark-master:
+        condition: service_healthy
+
+  data-generator:
+    image: python:3.10-slim
+    container_name: data-generator
+    volumes:
+      - ./data:/data
+    entrypoint: ["/bin/sh", "/data/generate_records.sh"]
+    healthcheck:
+      test: ["CMD", "test", "-f", "/data/cdr_data.csv"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  airflow:
+    build: .
+    container_name: airflow
+    ports:
+      - "8080:8080"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=False
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./jobs:/jobs
+      - ./data:/data
+      - ./output:/output
+    entrypoint: /bin/bash
+    command: -c "airflow db migrate && airflow users create --username admin --password admin --firstname Admin --lastname Admin --role Admin --email admin@example.com && (airflow scheduler & exec airflow webserver)"
+    depends_on:
+      data-generator:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5

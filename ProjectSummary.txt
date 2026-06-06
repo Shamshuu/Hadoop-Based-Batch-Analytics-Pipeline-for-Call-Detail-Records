@@ -1,0 +1,78 @@
+Overview & Purpose
+
+The Hadoop-Based Batch Analytics Pipeline for Call Detail Records is a scalable, containerized big-data processing system.
+
+Telecom providers generate billions of Call Detail Records (CDRs) daily (logs of calls, SMS, and data usage). This project simulates, orchestrates, and processes this information at scale to solve four key enterprise business problems:
+
+
+Financial Auditing: 
+Identifying high-value customers (Top Callers by Spend).
+
+Network Planning: 
+Visualizing cell tower traffic distribution throughout the day (Tower Heatmap).
+
+Fraud/Abuse Detection: 
+Identifying callers making calls of unusual durations (Anomalous Calls).
+
+Financial Reconciliation: 
+Verifying that total charged amounts reconcile across all CDRs (Revenue Reconciliation).
+
+
+How Each Technology Helps
+
+Apache Spark (PySpark): 
+Serves as the distributed execution engine. Instead of processing 2+ million records sequentially, Spark distributes the datasets across worker nodes and runs processing queries in-memory, making it extremely fast.
+Apache Airflow: Acts as the pipeline orchestrator. It manages task dependencies, handles job scheduling, schedules automatic retries on failure, and exposes a web UI and a REST API to trigger analytical runs.
+
+Hadoop (HDFS): 
+Runs as the storage layer (namenode and datanode containers) to represent a production-ready enterprise cluster environment designed to persist large volumes of files across distributed disks.
+
+Docker / Docker Compose: 
+Packages the entire environment (Spark Master, Spark Worker, Airflow Scheduler, Airflow Webserver, Hadoop NameNode, Hadoop DataNode, and a Data Generator) into container images, allowing you to run a full-scale big-data cluster on a local machine.
+
+
+How Each Functionality is Implemented
+
+1. Data Generation
+
+#File: generate_records.py
+
+#Logic: Generates exactly 2,050,000 synthetic CDR records in CSV format. It creates a stable caller/receiver profile database. To simulate real-world distributions, it creates a specific "whale caller" (responsible for over 10% of overall call volume) and injects a 0.1% rate of statistical duration outliers.
+
+
+2. Top Callers by Spend
+
+#DAG: top_callers_dag.py | Job: top_callers.py
+
+Logic: Uses Spark SQL's DataFrame API to read the CDR dataset, group records by caller_id, and sum the charge_amount. The results are ordered in descending order and limited to the top 100 spenders, then coalesced into a single output CSV.
+
+
+3. Tower Utilization Heatmap
+
+DAG: tower_heatmap_dag.py | Job: tower_heatmap.py
+
+Logic: Converts CDR ISO-8601 string timestamps to timestamps, extracts the hour_of_day (0–23), groups by tower_id and hour_of_day, and calculates call counts to profile tower congestion patterns.
+
+
+4. Anomalous Call Detection
+
+DAG: anomalous_calls_dag.py | Job: anomalous_calls.py
+
+Logic: Implements a distributed statistical anomaly detector:
+
+1. The dataset is converted to a PySpark RDD.
+2. A deterministic MD5-based custom partitioner (custom_partitioner) groups all records belonging to the same caller_id into the same Spark partition.
+3. Inside mapPartitions, it calculates the mean ($\mu$) and standard deviation ($\sigma$) of call durations for each caller.
+4. Any call duration ($x$) where $|x - \mu| > 3\sigma$ (deviating by more than 3 standard deviations) is flagged as an anomaly.
+
+
+5. Revenue Reconciliation
+
+DAG: revenue_recon_dag.py | Job: revenue_recon.py
+
+Logic: Performs a global sum aggregation of all charge_amount entries to produce a single value representing the total accrued pipeline revenue.
+
+
+6. Manifest Generation & Lineage
+
+Logic: Every job writes a custom metadata manifest (_MANIFEST.json) containing runtime metrics (input record count, output record count, execution timestamp, run ID, and status) at the completion of a run. This facilitates data lineage tracking and job monitoring.
